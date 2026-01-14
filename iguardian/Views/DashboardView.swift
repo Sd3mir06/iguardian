@@ -70,6 +70,10 @@ struct DashboardView: View {
                     SessionStatsCard(networkMonitor: monitoringManager.networkMonitor)
                         .padding(.horizontal)
                     
+                    // Traffic History Widget (links to detailed summary)
+                    TrafficHistoryWidget()
+                        .padding(.horizontal)
+                    
                     // Activity Feed
                     ActivityFeed(entries: monitoringManager.recentActivity)
                         .padding(.horizontal)
@@ -455,6 +459,80 @@ struct SleepGuardDashboardWidget: View {
         let minutes = (Int(elapsedTime) % 3600) / 60
         let seconds = Int(elapsedTime) % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+}
+
+// MARK: - Traffic History Widget
+struct TrafficHistoryWidget: View {
+    @StateObject private var trafficManager = TrafficLogManager.shared
+    
+    var body: some View {
+        NavigationLink {
+            TrafficSummaryView()
+        } label: {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.accentPrimary.opacity(0.15))
+                        .frame(width: 50, height: 50)
+                    
+                    Image(systemName: "chart.bar.fill")
+                        .font(.title2)
+                        .foregroundStyle(Theme.accentPrimary)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Traffic History")
+                        .font(Theme.body)
+                        .foregroundStyle(Theme.textPrimary)
+                    
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up")
+                                .font(.caption2)
+                                .foregroundColor(.cyan)
+                            Text(formatSize(trafficManager.todayUploadMB))
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                            Text(formatSize(trafficManager.todayDownloadMB))
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(.green)
+                        }
+                        
+                        Text("today")
+                            .font(.system(size: 10))
+                            .foregroundColor(Theme.textTertiary)
+                    }
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
+                    .fill(Theme.backgroundSecondary)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func formatSize(_ mb: Double) -> String {
+        if mb < 1 {
+            return String(format: "%.0f KB", mb * 1024)
+        } else if mb < 1024 {
+            return String(format: "%.1f MB", mb)
+        } else {
+            return String(format: "%.1f GB", mb / 1024)
+        }
     }
 }
 

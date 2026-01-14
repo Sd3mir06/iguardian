@@ -176,6 +176,14 @@ class NetworkMonitor: ObservableObject {
         lastUploadBytes = currentUp
         lastDownloadBytes = currentDown
         lastUpdateTime = now
+        
+        // Record to persistent storage (every update)
+        Task { @MainActor in
+            TrafficLogManager.shared.recordTraffic(
+                systemUpload: currentUp,
+                systemDownload: currentDown
+            )
+        }
     }
     
     private func calculateRollingTotal(seconds: TimeInterval, currentUp: UInt64, currentDown: UInt64) -> (UInt64, UInt64) {

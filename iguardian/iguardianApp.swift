@@ -33,7 +33,8 @@ struct iguardianApp: App {
         do {
             let schema = Schema([
                 SleepSession.self,
-                Incident.self
+                Incident.self,
+                TrafficLog.self
             ])
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             modelContainer = try ModelContainer(for: schema, configurations: [config])
@@ -43,6 +44,7 @@ struct iguardianApp: App {
             Task { @MainActor in
                 SleepGuardManager.shared.configure(modelContext: context)
                 IncidentManager.shared.configure(modelContext: context)
+                TrafficLogManager.shared.configure(modelContext: context)
             }
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
