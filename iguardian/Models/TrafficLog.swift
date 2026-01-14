@@ -15,17 +15,17 @@ class TrafficLog {
     var date: Date
     var intervalType: String  // "snapshot", "hourly", "daily"
     
-    // WiFi traffic
-    var wifiUploadBytes: Int64
-    var wifiDownloadBytes: Int64
-    
-    // Cellular traffic
-    var cellularUploadBytes: Int64
-    var cellularDownloadBytes: Int64
-    
-    // Combined (for backwards compatibility)
+    // Combined traffic (original fields - always present)
     var uploadBytes: Int64
     var downloadBytes: Int64
+    
+    // WiFi traffic - NEW fields with default value for migration
+    @Attribute(.allowsCloudEncryption) var wifiUploadBytes: Int64 = 0
+    @Attribute(.allowsCloudEncryption) var wifiDownloadBytes: Int64 = 0
+    
+    // Cellular traffic - NEW fields with default value for migration
+    @Attribute(.allowsCloudEncryption) var cellularUploadBytes: Int64 = 0
+    @Attribute(.allowsCloudEncryption) var cellularDownloadBytes: Int64 = 0
     
     // System-level totals at this point (for delta calculation)
     var systemUploadTotal: UInt64

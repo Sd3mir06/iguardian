@@ -29,25 +29,49 @@ struct iguardianApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
         UINavigationBar.appearance().compactAppearance = navAppearance
         
-        // Configure SwiftData
+        // Configure SwiftData with migration fallback
+        let schema = Schema([
+            SleepSession.self,
+            Incident.self,
+            TrafficLog.self
+        ])
+        
+        // First try with normal configuration
         do {
-            let schema = Schema([
-                SleepSession.self,
-                Incident.self,
-                TrafficLog.self
-            ])
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             modelContainer = try ModelContainer(for: schema, configurations: [config])
-            
-            // Configure managers with model context
-            let context = modelContainer.mainContext
-            Task { @MainActor in
-                SleepGuardManager.shared.configure(modelContext: context)
-                IncidentManager.shared.configure(modelContext: context)
-                TrafficLogManager.shared.configure(modelContext: context)
-            }
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            // Migration failed - delete old store and try again
+            print("⚠️ SwiftData migration failed: \(error)")
+            print("⚠️ Deleting old database and starting fresh...")
+            
+            // Delete the old store files
+            let storeURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("default.store")
+            let storePaths = [
+                storeURL,
+                storeURL.appendingPathExtension("shm"),
+                storeURL.appendingPathExtension("wal")
+            ]
+            for path in storePaths {
+                try? FileManager.default.removeItem(at: path)
+            }
+            
+            // Retry with fresh store
+            do {
+                let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+                modelContainer = try ModelContainer(for: schema, configurations: [config])
+                print("✅ Fresh database created successfully")
+            } catch {
+                fatalError("Failed to create ModelContainer after cleanup: \(error)")
+            }
+        }
+        
+        // Configure managers with model context
+        let context = modelContainer.mainContext
+        Task { @MainActor in
+            SleepGuardManager.shared.configure(modelContext: context)
+            IncidentManager.shared.configure(modelContext: context)
+            TrafficLogManager.shared.configure(modelContext: context)
         }
     }
     
