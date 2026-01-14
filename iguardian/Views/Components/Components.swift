@@ -7,33 +7,38 @@
 
 import SwiftUI
 
-// MARK: - Threat Score Ring - RADAR DESIGN
+// MARK: - Threat Score Ring - SHIELD CORE DESIGN
 struct ThreatScoreRing: View {
     let score: Int
     let threatLevel: ThreatLevel
     
     @State private var animatedScore: Int = 0
-    @State private var radarRotation: Double = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var glowOpacity: Double = 0.4
+    @State private var pulse: CGFloat = 1.0
+    @State private var rotation: Double = 0
+    @State private var innerRotation: Double = 0
+    @State private var glowOpacity: Double = 0.5
+    @State private var particleScale: CGFloat = 1.0
     
-    // Purple theme colors
-    private let radarColor = Color(red: 0.6, green: 0.3, blue: 1.0) // Vibrant purple
-    private let radarGlow = Color(red: 0.5, green: 0.2, blue: 0.9)
+    // Core theme colors (Purple/Cyan holographic)
+    private let primaryTech = Color(red: 0.6, green: 0.3, blue: 1.0)
+    private let secondaryTech = Color(red: 0.3, green: 0.8, blue: 1.0)
     
     var body: some View {
         ZStack {
-            // Layer 1: Concentric circles (revealed by radar)
-            concentricCircles
+            // Layer 1: Outer holographic data rings
+            holographicRings
             
-            // Layer 2: Radar sweep with trail
-            radarSweep
+            // Layer 2: Rotating data segments
+            dataSegments
             
-            // Layer 3: Outer ring with glow
-            outerRing
+            // Layer 3: Progress Ring (Holographic arc)
+            holographicProgressRing
             
-            // Layer 4: Central glowing orb with score
-            centralOrb
+            // Layer 4: Central Shield Core (AppLogo)
+            shieldCore
+            
+            // Layer 5: Dynamic Particles
+            techParticles
         }
         .onAppear {
             startAnimations()
@@ -45,142 +50,200 @@ struct ThreatScoreRing: View {
         }
     }
     
-    // MARK: - Concentric Circles (Background texture)
-    private var concentricCircles: some View {
+    // MARK: - Holographic Rings
+    private var holographicRings: some View {
         ZStack {
-            ForEach(1..<8, id: \.self) { index in
-                Circle()
-                    .stroke(radarColor.opacity(0.15), lineWidth: 0.5)
-                    .frame(width: CGFloat(index) * 28, height: CGFloat(index) * 28)
+            // Farthest faint orbit
+            Circle()
+                .stroke(primaryTech.opacity(0.1), lineWidth: 1)
+                .frame(width: 220, height: 220)
+            
+            // Middle dashed orbit
+            Circle()
+                .stroke(style: StrokeStyle(lineWidth: 1, dash: [2, 10]))
+                .foregroundColor(secondaryTech.opacity(0.3))
+                .frame(width: 190, height: 190)
+                .rotationEffect(.degrees(rotation))
+            
+            // Inner glowing technical border
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [primaryTech.opacity(0.4), .clear, secondaryTech.opacity(0.4)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.5
+                )
+                .frame(width: 170, height: 170)
+                .rotationEffect(.degrees(-rotation * 0.5))
+        }
+    }
+    
+    // MARK: - Data Segments
+    private var dataSegments: some View {
+        ZStack {
+            ForEach(0..<8, id: \.self) { index in
+                Capsule()
+                    .fill(primaryTech.opacity(0.4))
+                    .frame(width: 2, height: 12)
+                    .offset(y: -105)
+                    .rotationEffect(.degrees(Double(index) * 45 + rotation * 0.2))
+            }
+            
+            ForEach(0..<20, id: \.self) { index in
+                Rectangle()
+                    .fill(secondaryTech.opacity(0.2))
+                    .frame(width: 1, height: 4)
+                    .offset(y: -95)
+                    .rotationEffect(.degrees(Double(index) * 18 - rotation * 0.3))
             }
         }
     }
     
-    // MARK: - Radar Sweep
-    private var radarSweep: some View {
+    // MARK: - Holographic Progress Ring
+    private var holographicProgressRing: some View {
         ZStack {
-            // Radar sweep trail (fading cone)
-            AngularGradient(
-                stops: [
-                    .init(color: radarColor.opacity(0.5), location: 0.0),
-                    .init(color: radarColor.opacity(0.3), location: 0.05),
-                    .init(color: radarColor.opacity(0.15), location: 0.15),
-                    .init(color: radarColor.opacity(0.05), location: 0.25),
-                    .init(color: .clear, location: 0.35),
-                    .init(color: .clear, location: 1.0)
-                ],
-                center: .center,
-                startAngle: .degrees(0),
-                endAngle: .degrees(360)
-            )
-            .mask(
-                Circle()
-                    .frame(width: 180, height: 180)
-            )
-            .rotationEffect(.degrees(radarRotation))
+            // Background track
+            Circle()
+                .stroke(Theme.backgroundTertiary.opacity(0.3), lineWidth: 8)
+                .frame(width: 150, height: 150)
             
-            // Radar line (bright edge)
-            Rectangle()
-                .fill(
+            // The progress arc with vibrant tech gradient
+            Circle()
+                .trim(from: 0, to: CGFloat(animatedScore) / 100)
+                .stroke(
                     LinearGradient(
-                        colors: [radarColor, radarColor.opacity(0.8), radarColor.opacity(0)],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
+                        colors: [primaryTech, secondaryTech, primaryTech],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
                 )
-                .frame(width: 2, height: 90)
-                .offset(y: -45)
-                .shadow(color: radarColor, radius: 4)
-                .rotationEffect(.degrees(radarRotation))
-        }
-    }
-    
-    // MARK: - Outer Ring
-    private var outerRing: some View {
-        ZStack {
-            // Main outer ring
-            Circle()
-                .stroke(radarColor.opacity(0.8), lineWidth: 2)
-                .frame(width: 190, height: 190)
+                .frame(width: 150, height: 150)
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 1), value: animatedScore)
             
-            // Glow behind the ring
+            // Progress glow
             Circle()
-                .stroke(radarGlow, lineWidth: 4)
-                .frame(width: 190, height: 190)
-                .blur(radius: 8)
+                .trim(from: 0, to: CGFloat(animatedScore) / 100)
+                .stroke(primaryTech.opacity(0.5), lineWidth: 10)
+                .frame(width: 150, height: 150)
+                .blur(radius: 10)
                 .opacity(glowOpacity)
+                .rotationEffect(.degrees(-90))
+            
+            // Moving tick mark
+            if animatedScore > 0 {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: secondaryTech, radius: 10)
+                    .offset(y: -75)
+                    .rotationEffect(.degrees(-90 + (Double(animatedScore) / 100 * 360)))
+            }
         }
     }
     
-    // MARK: - Central Orb
-    private var centralOrb: some View {
+    // MARK: - Shield Core
+    private var shieldCore: some View {
         ZStack {
-            // Glowing orb background
+            // Outer pulse layer 1
+            Circle()
+                .stroke(primaryTech.opacity(0.2), lineWidth: 1)
+                .frame(width: 110, height: 110)
+                .scaleEffect(pulse)
+                .opacity(2.0 - pulse)
+            
+            // Outer pulse layer 2
+            Circle()
+                .stroke(secondaryTech.opacity(0.15), lineWidth: 1)
+                .frame(width: 130, height: 130)
+                .scaleEffect(pulse * 0.9)
+                .opacity(1.5 - pulse)
+            
+            // Central background glow
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [
-                            Color(red: 0.8, green: 0.4, blue: 1.0),
-                            Color(red: 0.5, green: 0.2, blue: 0.9),
-                            Color(red: 0.3, green: 0.1, blue: 0.6).opacity(0.5),
-                            .clear
-                        ],
+                        colors: [primaryTech.opacity(0.2), .clear],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 50
+                        endRadius: 60
                     )
                 )
-                .frame(width: 90, height: 90)
-                .scaleEffect(pulseScale)
+                .frame(width: 120, height: 120)
             
-            // Inner bright core
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            .white.opacity(0.9),
-                            Color(red: 0.7, green: 0.5, blue: 1.0),
-                            Color(red: 0.5, green: 0.2, blue: 0.9)
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 25
-                    )
-                )
-                .frame(width: 50, height: 50)
-                .shadow(color: radarColor, radius: 15)
+            // The App Logo (Shield)
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 85, height: 85)
+                .shadow(color: primaryTech.opacity(0.6), radius: 15)
+                .scaleEffect(1.0 + (pulse - 1.0) * 0.2) // Subtle pulse on icon
             
-            // Score and status overlay
-            VStack(spacing: 0) {
+            // Score overlay below center
+            VStack {
+                Spacer()
+                    .frame(height: 70)
+                
                 Text("\(animatedScore)")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
-                    .contentTransition(.numericText())
-                    .shadow(color: .black.opacity(0.3), radius: 2)
+                    .shadow(color: secondaryTech, radius: 8)
+                
+                Text(threatLevel.rawValue.uppercased())
+                    .font(.system(size: 8, weight: .black))
+                    .foregroundColor(Theme.textSecondary)
+                    .kerning(1.5)
+            }
+        }
+    }
+    
+    // MARK: - Tech Particles
+    private var techParticles: some View {
+        ZStack {
+            ForEach(0..<12, id: \.self) { index in
+                Circle()
+                    .fill(.white.opacity(0.6))
+                    .frame(width: 2, height: 2)
+                    .offset(x: cos(Double(index) * .pi / 6) * 115, y: sin(Double(index) * .pi / 6) * 115)
+                    .scaleEffect(particleScale)
+                    .blur(radius: 0.5)
             }
         }
     }
     
     // MARK: - Animations
     private func startAnimations() {
-        // Animate score in
-        withAnimation(.easeInOut(duration: 1)) {
+        // Linear score animate
+        withAnimation(.easeInOut(duration: 1.2)) {
             animatedScore = score
         }
         
-        // Radar sweep - smooth continuous rotation
-        withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-            radarRotation = 360
+        // Continuous rotation
+        withAnimation(.linear(duration: 40).repeatForever(autoreverses: false)) {
+            rotation = 360
         }
         
-        // Pulse effect on orb
-        withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.15
+        // Inner rotation
+        withAnimation(.linear(duration: 25).repeatForever(autoreverses: false)) {
+            innerRotation = 360
         }
         
-        // Glow pulsing
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            glowOpacity = 0.7
+        // Pulsing core
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            pulse = 1.2
+        }
+        
+        // Glow breathing
+        withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+            glowOpacity = 0.8
+        }
+        
+        // Particles breathing
+        withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+            particleScale = 1.5
         }
     }
 }
