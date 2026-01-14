@@ -1,0 +1,9 @@
+
+# Build
+build/
+*.xcuserstate
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
