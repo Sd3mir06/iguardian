@@ -226,7 +226,6 @@ struct OnboardingPageView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 22))
                         .shadow(color: page.iconColor.opacity(0.5), radius: 20)
                 } else {
                     Image(systemName: page.icon)

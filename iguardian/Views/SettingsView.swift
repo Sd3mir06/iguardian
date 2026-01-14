@@ -306,7 +306,6 @@ struct SettingsView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 60, height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
                         
                         Text("iGuardian")
                             .font(Theme.headline)

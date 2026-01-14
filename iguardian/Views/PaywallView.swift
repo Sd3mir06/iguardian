@@ -64,23 +64,12 @@ struct PaywallView: View {
     private var headerSection: some View {
         VStack(spacing: 16) {
             // Animated gradient icon
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple, Color.blue, Color.cyan],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-                
-                Image("AppLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-            }
+            // App logo
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 120, height: 120)
+                .shadow(color: .purple.opacity(0.5), radius: 20)
             
             Text("iGuardian Premium")
                 .font(.system(size: 28, weight: .bold, design: .rounded))

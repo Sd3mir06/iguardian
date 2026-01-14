@@ -177,7 +177,6 @@ struct SystemReportView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 Text("GUARDIAN SYSTEM REPORT")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))

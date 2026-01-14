@@ -162,7 +162,6 @@ struct SplashView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 22))
                         .shadow(color: Theme.accentPrimary.opacity(0.5), radius: 20)
                 }
                 
