@@ -231,6 +231,10 @@ struct SessionStatsCard: View {
                 
                 Spacer()
                 
+                Text(formatDuration(networkMonitor.sessionDuration))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(Theme.textSecondary)
+                
                 Button {
                     networkMonitor.resetSessionTotals()
                 } label: {
@@ -241,42 +245,106 @@ struct SessionStatsCard: View {
                 .buttonStyle(.plain)
             }
             
-            HStack(spacing: 20) {
-                // Session Duration
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Duration")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.textTertiary)
-                    Text(formatDuration(networkMonitor.sessionDuration))
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(Theme.textPrimary)
-                }
+            // WiFi Row
+            HStack {
+                Image(systemName: "wifi")
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
+                    .frame(width: 20)
                 
-                Divider()
-                    .frame(height: 30)
-                    .background(Theme.backgroundTertiary)
-                
-                // Session Upload
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Upload")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.textTertiary)
-                    Text(formatMB(networkMonitor.sessionUploadMB))
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.cyan)
-                }
-                
-                // Session Download
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Download")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.textTertiary)
-                    Text(formatMB(networkMonitor.sessionDownloadMB))
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
-                }
+                Text("WiFi")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .frame(width: 50, alignment: .leading)
                 
                 Spacer()
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10))
+                            .foregroundColor(.cyan)
+                        Text(formatMB(networkMonitor.sessionWifiUploadMB))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text(formatMB(networkMonitor.sessionWifiDownloadMB))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+            
+            // Cellular Row
+            HStack {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                    .frame(width: 20)
+                
+                Text("Cellular")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .frame(width: 50, alignment: .leading)
+                
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10))
+                            .foregroundColor(.cyan)
+                        Text(formatMB(networkMonitor.sessionCellularUploadMB))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text(formatMB(networkMonitor.sessionCellularDownloadMB))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+            
+            Divider()
+                .background(Theme.backgroundTertiary)
+            
+            // Total Row
+            HStack {
+                Text("Total")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Theme.textPrimary)
+                
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10))
+                            .foregroundColor(.cyan)
+                        Text(formatMB(networkMonitor.sessionUploadMB))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text(formatMB(networkMonitor.sessionDownloadMB))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                }
             }
         }
         .padding()
