@@ -118,7 +118,8 @@ class MonitoringManager: ObservableObject {
             .store(in: &cancellables)
         
         batteryMonitor.$batteryLevel
-            .sink { [weak self] _ in
+            .combineLatest(batteryMonitor.$drainRatePerHour)
+            .sink { [weak self] _, _ in
                 Task { @MainActor in
                     self?.updateCurrentSnapshot()
                 }
