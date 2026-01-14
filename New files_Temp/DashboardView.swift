@@ -2,7 +2,7 @@
 //  DashboardView.swift
 //  iguardian
 //
-//  Main dashboard screen showing threat score and all metrics
+//  Main dashboard - IMPROVED with total data tracking
 //
 
 import SwiftUI
@@ -10,6 +10,10 @@ import SwiftUI
 struct DashboardView: View {
     @ObservedObject var monitoringManager: MonitoringManager
     @State private var showSettings = false
+    @State private var showDebug = false
+    
+    // Get threshold values
+    @ObservedObject private var thresholds = ThresholdManager.shared
     
     var body: some View {
         NavigationStack {
@@ -29,20 +33,23 @@ struct DashboardView: View {
                         threatLevel: monitoringManager.threatLevel
                     )
                     
-                    // Metric Cards Grid
+                    // OPTION 1: Full-width Network Summary Card
+                    NetworkSummaryCard(
+                        uploadRate: monitoringManager.networkMonitor.uploadBytesPerSecond,
+                        downloadRate: monitoringManager.networkMonitor.downloadBytesPerSecond,
+                        uploadTotalMB: monitoringManager.networkMonitor.lastHourUploadMB,
+                        downloadTotalMB: monitoringManager.networkMonitor.lastHourDownloadMB,
+                        uploadThresholdMB: thresholds.threshold(for: .totalUpload).value,
+                        downloadThresholdMB: thresholds.threshold(for: .totalDownload).value,
+                        status: getNetworkStatus()
+                    )
+                    .padding(.horizontal)
+                    
+                    // CPU & Battery Cards
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
                         GridItem(.flexible())
                     ], spacing: 16) {
-                        UploadMetricCard(
-                            bytesPerSecond: monitoringManager.currentSnapshot.uploadBytesPerSecond,
-                            status: getUploadStatus()
-                        )
-                        
-                        DownloadMetricCard(
-                            bytesPerSecond: monitoringManager.currentSnapshot.downloadBytesPerSecond
-                        )
-                        
                         CPUMetricCard(
                             usagePercent: monitoringManager.currentSnapshot.cpuUsagePercent,
                             status: getCPUStatus()
@@ -59,8 +66,16 @@ struct DashboardView: View {
                     ThermalStatusCard(state: monitoringManager.currentSnapshot.thermalState)
                         .padding(.horizontal)
                     
+                    // Session Stats Card
+                    SessionStatsCard(networkMonitor: monitoringManager.networkMonitor)
+                        .padding(.horizontal)
+                    
                     // Activity Feed
                     ActivityFeed(entries: monitoringManager.recentActivity)
+                        .padding(.horizontal)
+                    
+                    // Sleep Guard Widget
+                    SleepGuardDashboardWidget()
                         .padding(.horizontal)
                     
                     Spacer(minLength: 100)
@@ -72,7 +87,8 @@ struct DashboardView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        // Shield icon tapped - could show app info
+                        showDebug = true
+                        LogManager.shared.log("Opening Debug Console", level: .debug, category: "UI")
                     } label: {
                         Image(systemName: "shield.checkered")
                             .font(.title2)
@@ -100,33 +116,67 @@ struct DashboardView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .sheet(isPresented: $showDebug) {
+                DebugConsoleView()
+            }
         }
         .onAppear {
             if !monitoringManager.isMonitoring {
                 monitoringManager.startMonitoring()
+                LogManager.shared.log("Started monitoring from Dashboard", level: .info, category: "Monitoring")
             }
         }
     }
     
     // MARK: - Status Helpers
+    private func getNetworkStatus() -> ThreatLevel {
+        let uploadMB = monitoringManager.networkMonitor.lastHourUploadMB
+        let downloadMB = monitoringManager.networkMonitor.lastHourDownloadMB
+        let uploadThreshold = thresholds.threshold(for: .totalUpload).value
+        let downloadThreshold = thresholds.threshold(for: .totalDownload).value
+        
+        // Check if either exceeds threshold
+        if uploadMB > uploadThreshold || downloadMB > downloadThreshold {
+            return .alert
+        }
+        
+        // Check if approaching threshold (70%)
+        if uploadMB > uploadThreshold * 0.7 || downloadMB > downloadThreshold * 0.7 {
+            return .warning
+        }
+        
+        return .normal
+    }
+    
     private func getUploadStatus() -> ThreatLevel {
-        let bytes = monitoringManager.currentSnapshot.uploadBytesPerSecond
-        if bytes > 2_000_000 { return .alert }
-        if bytes > 500_000 { return .warning }
+        let totalMB = monitoringManager.networkMonitor.lastHourUploadMB
+        let threshold = thresholds.threshold(for: .totalUpload).value
+        if totalMB > threshold { return .alert }
+        if totalMB > threshold * 0.7 { return .warning }
+        return .normal
+    }
+    
+    private func getDownloadStatus() -> ThreatLevel {
+        let totalMB = monitoringManager.networkMonitor.lastHourDownloadMB
+        let threshold = thresholds.threshold(for: .totalDownload).value
+        if totalMB > threshold { return .alert }
+        if totalMB > threshold * 0.7 { return .warning }
         return .normal
     }
     
     private func getCPUStatus() -> ThreatLevel {
         let cpu = monitoringManager.currentSnapshot.cpuUsagePercent
-        if cpu > 60 { return .alert }
-        if cpu > 30 { return .warning }
+        let threshold = thresholds.threshold(for: .cpuUsage).value
+        if cpu > threshold { return .alert }
+        if cpu > threshold * 0.7 { return .warning }
         return .normal
     }
     
     private func getBatteryStatus() -> ThreatLevel {
-        let drain = monitoringManager.currentSnapshot.batteryDrainPerHour
-        if drain > 10 { return .alert }
-        if drain > 5 { return .warning }
+        let drain = Double(monitoringManager.currentSnapshot.batteryDrainPerHour)
+        let threshold = thresholds.threshold(for: .batteryDrain).value
+        if drain > threshold { return .alert }
+        if drain > threshold * 0.7 { return .warning }
         return .normal
     }
 }
@@ -159,6 +209,102 @@ struct StatusBadge: View {
     }
 }
 
+// MARK: - Session Stats Card
+struct SessionStatsCard: View {
+    @ObservedObject var networkMonitor: NetworkMonitor
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.accentSecondary)
+                
+                Text("SESSION STATS")
+                    .font(Theme.micro)
+                    .foregroundColor(Theme.textTertiary)
+                    .kerning(1.2)
+                
+                Spacer()
+                
+                Button {
+                    networkMonitor.resetSessionTotals()
+                } label: {
+                    Text("Reset")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Theme.accentPrimary)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            HStack(spacing: 20) {
+                // Session Duration
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Duration")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textTertiary)
+                    Text(formatDuration(networkMonitor.sessionDuration))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                }
+                
+                Divider()
+                    .frame(height: 30)
+                    .background(Theme.backgroundTertiary)
+                
+                // Session Upload
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Upload")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textTertiary)
+                    Text(formatMB(networkMonitor.sessionUploadMB))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.cyan)
+                }
+                
+                // Session Download
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Download")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textTertiary)
+                    Text(formatMB(networkMonitor.sessionDownloadMB))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.green)
+                }
+                
+                Spacer()
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
+                .fill(Theme.backgroundSecondary)
+        )
+    }
+    
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        let secs = Int(seconds) % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %02dm", hours, minutes)
+        } else {
+            return String(format: "%dm %02ds", minutes, secs)
+        }
+    }
+    
+    private func formatMB(_ mb: Double) -> String {
+        if mb < 1 {
+            return String(format: "%.0f KB", mb * 1024)
+        } else if mb < 1024 {
+            return String(format: "%.1f MB", mb)
+        } else {
+            return String(format: "%.2f GB", mb / 1024)
+        }
+    }
+}
+
 // MARK: - Thermal Status Card
 struct ThermalStatusCard: View {
     let state: ThermalState
@@ -182,7 +328,6 @@ struct ThermalStatusCard: View {
             
             Spacer()
             
-            // Visual indicator
             HStack(spacing: 4) {
                 ForEach(0..<4) { index in
                     RoundedRectangle(cornerRadius: 2)
@@ -209,6 +354,107 @@ struct ThermalStatusCard: View {
         case .serious: return 3
         case .critical: return 4
         }
+    }
+}
+
+// MARK: - Sleep Guard Dashboard Widget (keep existing)
+struct SleepGuardDashboardWidget: View {
+    @StateObject private var manager = SleepGuardManager.shared
+    @StateObject private var store = StoreManager.shared
+    @State private var elapsedTime: TimeInterval = 0
+    @State private var timer: Timer?
+    
+    var body: some View {
+        NavigationLink {
+            SleepGuardView()
+        } label: {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(manager.isMonitoring ? Theme.statusSafe.opacity(0.2) : Theme.backgroundTertiary)
+                        .frame(width: 50, height: 50)
+                    
+                    Image(systemName: manager.isMonitoring ? "moon.stars.fill" : "moon.zzz")
+                        .font(.title2)
+                        .foregroundStyle(manager.isMonitoring ? Theme.statusSafe : Theme.textTertiary)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Sleep Guard")
+                        .font(Theme.body)
+                        .foregroundStyle(Theme.textPrimary)
+                    
+                    if manager.isMonitoring {
+                        Text(formattedElapsedTime)
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Theme.accentPrimary)
+                    } else if let lastReport = manager.lastReport {
+                        Text(lastReport.statusSummary)
+                            .font(Theme.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                    } else {
+                        Text(store.isPremium ? "Tap to start" : "Premium Feature")
+                            .font(Theme.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                
+                Spacer()
+                
+                if manager.isMonitoring {
+                    Circle()
+                        .fill(Theme.statusSafe)
+                        .frame(width: 10, height: 10)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
+                    .fill(Theme.backgroundSecondary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
+                            .stroke(manager.isMonitoring ? Theme.statusSafe.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onAppear {
+            if manager.isMonitoring { startTimer() }
+        }
+        .onDisappear { stopTimer() }
+        .onChange(of: manager.isMonitoring) { _, isMonitoring in
+            if isMonitoring { startTimer() } else { stopTimer() }
+        }
+    }
+    
+    private func startTimer() {
+        timer?.invalidate()
+        updateElapsedTime()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            updateElapsedTime()
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+        elapsedTime = 0
+    }
+    
+    private func updateElapsedTime() {
+        if let session = manager.currentSession {
+            elapsedTime = Date().timeIntervalSince(session.startTime)
+        }
+    }
+    
+    private var formattedElapsedTime: String {
+        let hours = Int(elapsedTime) / 3600
+        let minutes = (Int(elapsedTime) % 3600) / 60
+        let seconds = Int(elapsedTime) % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
 }
 
