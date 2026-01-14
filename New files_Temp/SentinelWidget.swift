@@ -292,15 +292,7 @@ struct CircularWidgetView: View {
                 Text("\(entry.threatScore)")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
             }
-            .foregroundStyle(circularColor)
-        }
-    }
-    
-    private var circularColor: Color {
-        switch entry.threatLevel {
-        case 0: return .white
-        case 1: return .orange
-        default: return .red
+            .foregroundStyle(entry.threatLevel == 0 ? .primary : (entry.threatLevel == 1 ? .orange : .red))
         }
     }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 struct XRayView: View {
     @StateObject private var xray = XRayDataManager.shared
     @ObservedObject var monitoringManager: MonitoringManager
+    @State private var showSystemReport = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -40,6 +41,28 @@ struct XRayView: View {
                         idle: xray.idleEnergyPerHour
                     )
                     
+                    // System Report Button
+                    Button {
+                        showSystemReport = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc.text.magnifyingglass")
+                            Text("GENERATE SYSTEM REPORT")
+                        }
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+                    
                     Spacer(minLength: 100)
                 }
                 .padding()
@@ -47,6 +70,9 @@ struct XRayView: View {
             .background(Color.black)
             .navigationTitle("GUARDIAN X-RAY")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showSystemReport) {
+                SystemReportView()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Close") {

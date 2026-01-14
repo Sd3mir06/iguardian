@@ -2,12 +2,14 @@
 //  MonitoringManager.swift
 //  iguardian
 //
-//  Central coordinator - IMPROVED with better network total tracking
+//  IMPROVED: Smart idle detection, no false alarms, proper notifications
+//  Only alerts when phone is IDLE and suspicious activity detected
 //
 
 import Foundation
 import Combine
 import SwiftUI
+import UserNotifications
 
 @MainActor
 class MonitoringManager: ObservableObject {
@@ -19,7 +21,12 @@ class MonitoringManager: ObservableObject {
     @Published var recentActivity: [ActivityEntry] = []
     @Published var isMonitoring: Bool = false
     
-    // MARK: - Monitors (public for direct access to totals)
+    // NEW: Idle state detection
+    @Published var isDeviceIdle: Bool = false
+    @Published var idleDuration: TimeInterval = 0
+    @Published var lastUserInteraction: Date = Date()
+    
+    // MARK: - Monitors
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
     let batteryMonitor = BatteryMonitor()
@@ -28,11 +35,26 @@ class MonitoringManager: ObservableObject {
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     private var updateTimer: Timer?
-    private let threatCalculationInterval: TimeInterval = 2.0
+    private var idleCheckTimer: Timer?
+    private let threatCalculationInterval: TimeInterval = 3.0  // Slower = less spam
     
-    // Alert cooldowns to prevent spam
+    // Alert cooldowns - increased to prevent spam
     private var lastAlertTime: [String: Date] = [:]
-    private let alertCooldown: TimeInterval = 60 // 1 minute between same alerts
+    private let alertCooldown: TimeInterval = 300 // 5 minutes between same alerts
+    private var lastThreatLevelChangeTime: Date = Date()
+    private let levelChangeCooldown: TimeInterval = 60 // 1 minute between level changes
+    
+    // Idle detection thresholds
+    private let idleThresholdSeconds: TimeInterval = 60 // Consider idle after 1 minute
+    private let idleCPUThreshold: Double = 15 // CPU below this = likely idle
+    private let idleNetworkThreshold: Double = 50_000 // 50 KB/s = background noise
+    
+    // Baseline learning (learns normal idle patterns)
+    private var baselineUploadRate: Double = 0
+    private var baselineDownloadRate: Double = 0
+    private var baselineCPU: Double = 0
+    private var baselineSamples: Int = 0
+    private let baselineMinSamples = 30 // Need 30 samples to establish baseline
     
     // MARK: - Singleton
     static let shared = MonitoringManager()
@@ -40,6 +62,18 @@ class MonitoringManager: ObservableObject {
     // MARK: - Initialization
     init() {
         setupSubscriptions()
+        requestNotificationPermission()
+    }
+    
+    // MARK: - Notification Permission
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                LogManager.shared.log("Notification permission granted", level: .info, category: "Notifications")
+            } else if let error = error {
+                LogManager.shared.log("Notification permission error: \(error)", level: .error, category: "Notifications")
+            }
+        }
     }
     
     // MARK: - Public Methods
@@ -47,6 +81,7 @@ class MonitoringManager: ObservableObject {
         guard !isMonitoring else { return }
         
         isMonitoring = true
+        lastUserInteraction = Date()
         
         networkMonitor.startMonitoring()
         cpuMonitor.startMonitoring()
@@ -58,15 +93,16 @@ class MonitoringManager: ObservableObject {
         addActivityEntry(
             type: .monitoringStarted,
             title: "Monitoring Started",
-            description: "iGuardian is now actively monitoring your device",
+            description: "iGuardian is now protecting your device",
             threatLevel: .normal
         )
         
-        // Start threat calculation timer
+        // Threat calculation timer
         updateTimer = Timer.scheduledTimer(withTimeInterval: threatCalculationInterval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+                self.updateIdleState()
                 self.calculateThreatLevel()
                 self.updateLiveActivity()
             }
@@ -79,6 +115,8 @@ class MonitoringManager: ObservableObject {
     func stopMonitoring() {
         updateTimer?.invalidate()
         updateTimer = nil
+        idleCheckTimer?.invalidate()
+        idleCheckTimer = nil
         
         networkMonitor.stopMonitoring()
         cpuMonitor.stopMonitoring()
@@ -97,9 +135,14 @@ class MonitoringManager: ObservableObject {
         LogManager.shared.log("Monitoring stopped", level: .info, category: "Monitoring")
     }
     
+    /// Call this when user interacts with the app
+    func registerUserInteraction() {
+        lastUserInteraction = Date()
+        isDeviceIdle = false
+    }
+    
     // MARK: - Private Methods
     private func setupSubscriptions() {
-        // Combine all monitor updates
         networkMonitor.$uploadBytesPerSecond
             .combineLatest(networkMonitor.$downloadBytesPerSecond)
             .sink { [weak self] _, _ in
@@ -118,7 +161,8 @@ class MonitoringManager: ObservableObject {
             .store(in: &cancellables)
         
         batteryMonitor.$batteryLevel
-            .sink { [weak self] _ in
+            .combineLatest(batteryMonitor.$drainRatePerHour)
+            .sink { [weak self] _, _ in
                 Task { @MainActor in
                     self?.updateCurrentSnapshot()
                 }
@@ -146,166 +190,234 @@ class MonitoringManager: ObservableObject {
             threatLevel: threatLevel,
             threatScore: threatScore
         )
-        
-        LogManager.shared.log(
-            "Snapshot: Up=\(String(format: "%.1f", networkMonitor.uploadBytesPerSecond/1024))KB/s, " +
-            "TotalUp=\(String(format: "%.1f", networkMonitor.lastHourUploadMB))MB/h, " +
-            "CPU=\(Int(cpuMonitor.cpuUsagePercent))%",
-            level: .debug,
-            category: "Metrics"
-        )
     }
     
-    /// Multi-factor threat detection algorithm - IMPROVED
+    // MARK: - Idle State Detection
+    private func updateIdleState() {
+        let now = Date()
+        idleDuration = now.timeIntervalSince(lastUserInteraction)
+        
+        // Check if device appears idle
+        let cpuIdle = cpuMonitor.cpuUsagePercent < idleCPUThreshold
+        let networkIdle = networkMonitor.uploadBytesPerSecond < idleNetworkThreshold &&
+                         networkMonitor.downloadBytesPerSecond < idleNetworkThreshold
+        let timeIdle = idleDuration > idleThresholdSeconds
+        
+        let wasIdle = isDeviceIdle
+        isDeviceIdle = timeIdle && (cpuIdle || networkIdle)
+        
+        // Update baseline when truly idle
+        if isDeviceIdle && cpuIdle && networkIdle {
+            updateBaseline()
+        }
+        
+        if isDeviceIdle && !wasIdle {
+            LogManager.shared.log("Device entered idle state", level: .debug, category: "Idle")
+        }
+    }
+    
+    private func updateBaseline() {
+        // Exponential moving average for baseline
+        let alpha = 0.1
+        
+        if baselineSamples < baselineMinSamples {
+            // Initial collection
+            baselineUploadRate = (baselineUploadRate * Double(baselineSamples) + networkMonitor.uploadBytesPerSecond) / Double(baselineSamples + 1)
+            baselineDownloadRate = (baselineDownloadRate * Double(baselineSamples) + networkMonitor.downloadBytesPerSecond) / Double(baselineSamples + 1)
+            baselineCPU = (baselineCPU * Double(baselineSamples) + cpuMonitor.cpuUsagePercent) / Double(baselineSamples + 1)
+            baselineSamples += 1
+        } else {
+            // EMA update
+            baselineUploadRate = alpha * networkMonitor.uploadBytesPerSecond + (1 - alpha) * baselineUploadRate
+            baselineDownloadRate = alpha * networkMonitor.downloadBytesPerSecond + (1 - alpha) * baselineDownloadRate
+            baselineCPU = alpha * cpuMonitor.cpuUsagePercent + (1 - alpha) * baselineCPU
+        }
+    }
+    
+    // MARK: - Smart Threat Detection (NO FALSE ALARMS)
     private func calculateThreatLevel() {
         var score = 0
         var factors: [String] = []
+        var isSuspicious = false
         
         let tm = ThresholdManager.shared
         
-        // ===== NETWORK TOTALS (Primary concern for data usage) =====
+        // ============================================
+        // ONLY CHECK FOR THREATS WHEN DEVICE IS IDLE
+        // ============================================
         
-        // 1. Total Upload in last hour (THIS IS THE KEY METRIC YOU WANTED)
+        // If device is NOT idle, keep score at 0 (user is actively using phone)
+        guard isDeviceIdle else {
+            // Device in use - no alerts needed
+            if threatLevel != .normal {
+                // Return to normal when user starts using phone
+                threatScore = 0
+                threatLevel = .normal
+                updateCurrentSnapshot()
+            }
+            return
+        }
+        
+        // ============================================
+        // IDLE MODE CHECKS - Only alert for REAL issues
+        // ============================================
+        
+        // 1. TOTAL DATA UPLOAD in last hour (PRIMARY METRIC for data theft)
         let totalUpMB = networkMonitor.lastHourUploadMB
         let totalUpThreshold = tm.threshold(for: .totalUpload)
+        
         if totalUpThreshold.isEnabled && totalUpMB > totalUpThreshold.value {
-            score += 35  // High score for exceeding total
-            factors.append("⚠️ Upload exceeded \(Int(totalUpThreshold.value))MB limit (\(Int(totalUpMB))MB)")
-            triggerAlert(key: "totalUpload", message: "Upload data exceeded \(Int(totalUpThreshold.value))MB in the last hour")
-        } else if totalUpThreshold.isEnabled && totalUpMB > totalUpThreshold.value * 0.7 {
-            score += 15
-            factors.append("Upload approaching limit (\(Int(totalUpMB))/\(Int(totalUpThreshold.value))MB)")
+            // This is SERIOUS - large amount of data uploaded while phone idle
+            score += 50
+            factors.append("🚨 \(Int(totalUpMB))MB uploaded while idle (limit: \(Int(totalUpThreshold.value))MB)")
+            isSuspicious = true
+        } else if totalUpThreshold.isEnabled && totalUpMB > totalUpThreshold.value * 0.8 {
+            score += 20
+            factors.append("⚠️ Upload approaching limit: \(Int(totalUpMB))/\(Int(totalUpThreshold.value))MB")
         }
         
-        // 2. Total Download in last hour
+        // 2. TOTAL DATA DOWNLOAD in last hour
         let totalDownMB = networkMonitor.lastHourDownloadMB
         let totalDownThreshold = tm.threshold(for: .totalDownload)
+        
         if totalDownThreshold.isEnabled && totalDownMB > totalDownThreshold.value {
-            score += 25
-            factors.append("⚠️ Download exceeded \(Int(totalDownThreshold.value))MB limit (\(Int(totalDownMB))MB)")
-            triggerAlert(key: "totalDownload", message: "Download data exceeded \(Int(totalDownThreshold.value))MB in the last hour")
-        } else if totalDownThreshold.isEnabled && totalDownMB > totalDownThreshold.value * 0.7 {
-            score += 10
-            factors.append("Download approaching limit (\(Int(totalDownMB))/\(Int(totalDownThreshold.value))MB)")
+            score += 30
+            factors.append("📥 \(Int(totalDownMB))MB downloaded while idle")
+            isSuspicious = true
         }
         
-        // ===== INSTANT RATES (Secondary - for detecting spikes) =====
-        
-        // 3. Instant Upload Rate (useful for detecting sudden bursts)
+        // 3. SUSTAINED HIGH UPLOAD RATE (possible screen mirroring/streaming)
+        // Only flag if rate is significantly above baseline AND sustained
         let uploadRateMBH = (networkMonitor.uploadBytesPerSecond * 3600) / (1024 * 1024)
         let uploadRateThreshold = tm.threshold(for: .uploadRate)
-        if uploadRateThreshold.isEnabled && uploadRateMBH > uploadRateThreshold.value {
-            score += 15
-            factors.append("High upload rate (\(Int(uploadRateMBH))MB/h equivalent)")
+        let baselineMultiplier = 5.0 // Must be 5x baseline to be suspicious
+        
+        let isAboveBaseline = baselineSamples >= baselineMinSamples &&
+            networkMonitor.uploadBytesPerSecond > (baselineUploadRate * baselineMultiplier)
+        
+        if uploadRateThreshold.isEnabled && uploadRateMBH > uploadRateThreshold.value && isAboveBaseline {
+            score += 25
+            factors.append("📤 Sustained upload: \(Int(uploadRateMBH))MB/h (5x normal)")
+            isSuspicious = true
         }
         
-        // 4. Instant Download Rate
-        let downloadRateMBH = (networkMonitor.downloadBytesPerSecond * 3600) / (1024 * 1024)
-        let downloadRateThreshold = tm.threshold(for: .downloadRate)
-        if downloadRateThreshold.isEnabled && downloadRateMBH > downloadRateThreshold.value {
-            score += 10
-            factors.append("High download rate (\(Int(downloadRateMBH))MB/h equivalent)")
-        }
-        
-        // ===== OTHER METRICS =====
-        
-        // 5. CPU usage
+        // 4. HIGH CPU WHILE IDLE (very suspicious)
         let cpuUsage = cpuMonitor.cpuUsagePercent
         let cpuThreshold = tm.threshold(for: .cpuUsage)
+        
         if cpuThreshold.isEnabled && cpuUsage > cpuThreshold.value {
-            score += 20
-            factors.append("High CPU (\(Int(cpuUsage))%)")
+            score += 25
+            factors.append("🔥 High CPU while idle: \(Int(cpuUsage))%")
+            isSuspicious = true
         }
         
-        // 6. Battery drain
+        // 5. ABNORMAL BATTERY DRAIN while idle
         let drainRate = batteryMonitor.drainRatePerHour
         let batteryThreshold = tm.threshold(for: .batteryDrain)
+        
         if batteryThreshold.isEnabled && Double(drainRate) > batteryThreshold.value {
-            score += 15
-            factors.append("Fast battery drain (\(Int(drainRate))%/h)")
-        }
-        
-        // 7. Thermal state
-        let thermal = thermalMonitor.thermalState
-        switch thermal {
-        case .critical:
             score += 20
-            factors.append("Critical thermal state")
-        case .serious:
-            score += 12
-            factors.append("Serious thermal state")
-        case .fair:
-            score += 5
-        case .nominal:
-            break
+            factors.append("🔋 Fast drain while idle: \(Int(drainRate))%/hr")
         }
         
-        // ===== MULTI-FACTOR DETECTION =====
-        // Suspicious pattern: High upload + High CPU + High battery drain = possible screen mirroring
-        let suspiciousPattern = totalUpMB > 50 && cpuUsage > 25 && drainRate > 5
-        if suspiciousPattern {
-            score += 15
-            factors.append("⚠️ Multi-factor anomaly detected")
+        // 6. THERMAL WARNING while idle
+        let thermal = thermalMonitor.thermalState
+        if thermal == .serious || thermal == .critical {
+            score += 20
+            factors.append("🌡️ Device heating up while idle")
+            isSuspicious = true
+        }
+        
+        // ============================================
+        // MULTI-FACTOR DETECTION (Screen Mirroring Pattern)
+        // ============================================
+        // Classic screen mirroring: High upload + High CPU + Battery drain
+        let possibleScreenMirror = totalUpMB > 30 && cpuUsage > 20 && drainRate > 3
+        if possibleScreenMirror {
+            score += 20
+            factors.append("⚠️ Pattern matches possible screen surveillance")
+            isSuspicious = true
         }
         
         // Cap at 100
         score = min(100, score)
         
-        // Determine threat level
+        // ============================================
+        // DETERMINE THREAT LEVEL (with hysteresis)
+        // ============================================
         let newThreatLevel: ThreatLevel
         switch score {
-        case 0..<15:
+        case 0..<20:
             newThreatLevel = .normal
-        case 15..<40:
+        case 20..<45:
             newThreatLevel = .warning
-        case 40..<70:
+        case 45..<70:
             newThreatLevel = .alert
         default:
             newThreatLevel = .critical
         }
         
-        // Check if threat level changed
-        let levelChanged = newThreatLevel != threatLevel
+        // Prevent rapid level changes (hysteresis)
+        let now = Date()
+        let canChangeLevel = now.timeIntervalSince(lastThreatLevelChangeTime) > levelChangeCooldown
+        let levelChanged = newThreatLevel != threatLevel && canChangeLevel
         
-        // Update published properties
+        // Update state
         threatScore = score
-        threatLevel = newThreatLevel
-        updateCurrentSnapshot()
         
-        // Log activity on threat level changes
         if levelChanged {
+            threatLevel = newThreatLevel
+            lastThreatLevelChangeTime = now
+            
+            // Log and create activity entry
             LogManager.shared.log(
-                "Threat level: \(threatLevel.rawValue) (Score: \(score)). Factors: \(factors.joined(separator: ", "))",
+                "Threat level: \(threatLevel.rawValue) (Score: \(score))",
                 level: newThreatLevel == .normal ? .info : .warning,
                 category: "Security"
             )
             
-            if newThreatLevel != .normal {
-                let factorDesc = factors.isEmpty ? "Various indicators" : factors.joined(separator: ", ")
+            // Only add activity entries for significant events
+            if isSuspicious && newThreatLevel != .normal {
+                let factorDesc = factors.joined(separator: "\n")
                 addActivityEntry(
                     type: newThreatLevel == .warning ? .warning : .alert,
-                    title: newThreatLevel.message,
+                    title: "⚠️ Suspicious Activity While Idle",
                     description: factorDesc,
                     threatLevel: newThreatLevel
                 )
+                
+                // Send notification for real threats
+                if newThreatLevel == .alert || newThreatLevel == .critical {
+                    sendNotification(title: "Security Alert", body: factors.first ?? "Suspicious activity detected")
+                }
             }
         }
+        
+        updateCurrentSnapshot()
     }
     
-    private func triggerAlert(key: String, message: String) {
-        let now = Date()
+    // MARK: - Notifications
+    private func sendNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "🛡️ iGuardian"
+        content.subtitle = title
+        content.body = body
+        content.sound = .default
+        content.badge = 1
         
-        // Check cooldown
-        if let lastTime = lastAlertTime[key], now.timeIntervalSince(lastTime) < alertCooldown {
-            return // Still in cooldown
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil // Immediate
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                LogManager.shared.log("Notification error: \(error)", level: .error, category: "Notifications")
+            } else {
+                LogManager.shared.log("Notification sent: \(title)", level: .info, category: "Notifications")
+            }
         }
-        
-        lastAlertTime[key] = now
-        
-        // Log the alert
-        LogManager.shared.log("ALERT: \(message)", level: .warning, category: "Alert")
-        
-        // TODO: Send notification if enabled
     }
     
     private func addActivityEntry(type: ActivityType, title: String, description: String, threatLevel: ThreatLevel) {

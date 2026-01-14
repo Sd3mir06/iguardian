@@ -2,7 +2,7 @@
 //  SentinelActivityAttributes.swift
 //  iguardian
 //
-//  Created by Sukru Demir on 14.01.2026.
+//  IMPROVED: Added idle state to show monitoring status
 //
 
 import ActivityKit
@@ -17,6 +17,7 @@ struct SentinelActivityAttributes: ActivityAttributes {
         var cpuUsage: Double         // percentage
         var threatLevel: Int         // 0 = normal, 1 = warning, 2 = alert
         var threatScore: Int         // 0-100
+        var isIdle: Bool             // NEW: Is device idle?
     }
     
     // Static attributes (set when activity starts)
@@ -43,7 +44,7 @@ extension SentinelActivityAttributes.ContentState {
     
     var statusText: String {
         switch threatLevel {
-        case 0: return "Normal"
+        case 0: return "All Clear"
         case 1: return "Warning"
         default: return "Alert"
         }
@@ -51,9 +52,9 @@ extension SentinelActivityAttributes.ContentState {
     
     private func formatSpeed(_ bytesPerSecond: Double) -> String {
         if bytesPerSecond < 1024 {
-            return String(format: "%.0f B/s", bytesPerSecond)
+            return "0 B/s"
         } else if bytesPerSecond < 1024 * 1024 {
-            return String(format: "%.1f KB/s", bytesPerSecond / 1024)
+            return String(format: "%.0f KB/s", bytesPerSecond / 1024)
         } else {
             return String(format: "%.1f MB/s", bytesPerSecond / (1024 * 1024))
         }
