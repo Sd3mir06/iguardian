@@ -66,12 +66,8 @@ struct DashboardView: View {
                     ThermalStatusCard(state: monitoringManager.currentSnapshot.thermalState)
                         .padding(.horizontal)
                     
-                    // Session Stats Card
-                    SessionStatsCard(networkMonitor: monitoringManager.networkMonitor)
-                        .padding(.horizontal)
-                    
-                    // Traffic History Widget (links to detailed summary)
-                    TrafficHistoryWidget()
+                    // Combined Network Traffic Card (session stats + history link)
+                    NetworkTrafficCard(networkMonitor: monitoringManager.networkMonitor)
                         .padding(.horizontal)
                     
                     // Activity Feed
@@ -213,7 +209,172 @@ struct StatusBadge: View {
     }
 }
 
-// MARK: - Session Stats Card
+// MARK: - Network Traffic Card (Combined Session + History)
+struct NetworkTrafficCard: View {
+    @ObservedObject var networkMonitor: NetworkMonitor
+    @StateObject private var trafficManager = TrafficLogManager.shared
+    
+    var body: some View {
+        NavigationLink {
+            TrafficSummaryView()
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
+                HStack {
+                    Image(systemName: "network")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Theme.accentSecondary)
+                    
+                    Text("NETWORK USAGE")
+                        .font(Theme.micro)
+                        .foregroundColor(Theme.textTertiary)
+                        .kerning(1.2)
+                    
+                    Spacer()
+                    
+                    Text(formatDuration(networkMonitor.sessionDuration))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(Theme.textTertiary)
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.textTertiary)
+                }
+                
+                // WiFi Row
+                HStack {
+                    Image(systemName: "wifi")
+                        .font(.system(size: 14))
+                        .foregroundColor(.blue)
+                        .frame(width: 20)
+                    
+                    Text("WiFi")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.textSecondary)
+                        .frame(width: 45, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 12) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 9))
+                                .foregroundColor(.cyan)
+                            Text(formatMB(networkMonitor.sessionWifiUploadMB))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                        
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9))
+                                .foregroundColor(.green)
+                            Text(formatMB(networkMonitor.sessionWifiDownloadMB))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+                
+                // Cellular Row
+                HStack {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                        .frame(width: 20)
+                    
+                    Text("Cellular")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.textSecondary)
+                        .frame(width: 45, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 12) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 9))
+                                .foregroundColor(.cyan)
+                            Text(formatMB(networkMonitor.sessionCellularUploadMB))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                        
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9))
+                                .foregroundColor(.green)
+                            Text(formatMB(networkMonitor.sessionCellularDownloadMB))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+                
+                Divider()
+                    .background(Theme.backgroundTertiary)
+                
+                // Today's Total Row
+                HStack {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.accentPrimary)
+                        .frame(width: 20)
+                    
+                    Text("Today")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Theme.textPrimary)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 12) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 9))
+                                .foregroundColor(.cyan)
+                            Text(formatMB(trafficManager.todayUploadMB))
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                        
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9))
+                                .foregroundColor(.green)
+                            Text(formatMB(trafficManager.todayDownloadMB))
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
+                    .fill(Theme.backgroundSecondary)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        if hours > 0 {
+            return String(format: "%dh %02dm", hours, minutes)
+        } else {
+            return String(format: "%dm", minutes)
+        }
+    }
+    
+    private func formatMB(_ mb: Double) -> String {
+        if mb < 1 { return String(format: "%.0f KB", mb * 1024) }
+        else if mb < 1024 { return String(format: "%.1f MB", mb) }
+        else { return String(format: "%.1f GB", mb / 1024) }
+    }
+}
+
+// MARK: - Session Stats Card (LEGACY - kept for reference)
 struct SessionStatsCard: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     
