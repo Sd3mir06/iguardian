@@ -7,41 +7,33 @@
 
 import SwiftUI
 
-// MARK: - Threat Score Ring - ULTIMATE TECH DESIGN
+// MARK: - Threat Score Ring - RADAR DESIGN
 struct ThreatScoreRing: View {
     let score: Int
     let threatLevel: ThreatLevel
     
     @State private var animatedScore: Int = 0
-    @State private var rotation: Double = 0
-    @State private var innerRotation: Double = 0
     @State private var radarRotation: Double = 0
     @State private var pulseScale: CGFloat = 1.0
-    @State private var glowOpacity: Double = 0.3
-    @State private var particleOffset: CGFloat = 0
+    @State private var glowOpacity: Double = 0.4
+    
+    // Purple theme colors
+    private let radarColor = Color(red: 0.6, green: 0.3, blue: 1.0) // Vibrant purple
+    private let radarGlow = Color(red: 0.5, green: 0.2, blue: 0.9)
     
     var body: some View {
         ZStack {
-            // Layer 1: Outer rotating orbital rings
-            orbitingRingsLayer
+            // Layer 1: Concentric circles (revealed by radar)
+            concentricCircles
             
-            // Layer 2: Hex grid pattern (subtle background)
-            hexGridPattern
-            
-            // Layer 3: Radar sweep effect
+            // Layer 2: Radar sweep with trail
             radarSweep
             
-            // Layer 4: Main progress ring
-            mainProgressRing
+            // Layer 3: Outer ring with glow
+            outerRing
             
-            // Layer 5: Inner tech ring
-            innerTechRing
-            
-            // Layer 6: Floating particles
-            floatingParticles
-            
-            // Layer 7: Central core with score
-            centralCore
+            // Layer 4: Central glowing orb with score
+            centralOrb
         }
         .onAppear {
             startAnimations()
@@ -53,41 +45,13 @@ struct ThreatScoreRing: View {
         }
     }
     
-    // MARK: - Orbiting Rings Layer
-    private var orbitingRingsLayer: some View {
+    // MARK: - Concentric Circles (Background texture)
+    private var concentricCircles: some View {
         ZStack {
-            // Outer dashed orbit
-            Circle()
-                .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 6]))
-                .foregroundColor(threatLevel.color.opacity(0.2))
-                .frame(width: 220, height: 220)
-                .rotationEffect(.degrees(rotation))
-            
-            // Middle orbit with dots
-            ForEach(0..<12, id: \.self) { index in
+            ForEach(1..<8, id: \.self) { index in
                 Circle()
-                    .fill(threatLevel.color.opacity(0.3))
-                    .frame(width: 4, height: 4)
-                    .offset(y: -95)
-                    .rotationEffect(.degrees(Double(index) * 30 + rotation))
-            }
-            
-            // Inner orbit ring
-            Circle()
-                .stroke(threatLevel.color.opacity(0.15), lineWidth: 0.5)
-                .frame(width: 170, height: 170)
-                .rotationEffect(.degrees(-rotation * 0.5))
-        }
-    }
-    
-    // MARK: - Hex Grid Pattern
-    private var hexGridPattern: some View {
-        ZStack {
-            ForEach(0..<6, id: \.self) { index in
-                HexagonShape()
-                    .stroke(threatLevel.color.opacity(0.05), lineWidth: 1)
-                    .frame(width: 140, height: 140)
-                    .rotationEffect(.degrees(Double(index) * 10))
+                    .stroke(radarColor.opacity(0.15), lineWidth: 0.5)
+                    .frame(width: CGFloat(index) * 28, height: CGFloat(index) * 28)
             }
         }
     }
@@ -95,12 +59,15 @@ struct ThreatScoreRing: View {
     // MARK: - Radar Sweep
     private var radarSweep: some View {
         ZStack {
-            // Radar sweep cone
+            // Radar sweep trail (fading cone)
             AngularGradient(
-                colors: [
-                    threatLevel.color.opacity(0.4),
-                    threatLevel.color.opacity(0.1),
-                    .clear, .clear, .clear, .clear, .clear, .clear
+                stops: [
+                    .init(color: radarColor.opacity(0.5), location: 0.0),
+                    .init(color: radarColor.opacity(0.3), location: 0.05),
+                    .init(color: radarColor.opacity(0.15), location: 0.15),
+                    .init(color: radarColor.opacity(0.05), location: 0.25),
+                    .init(color: .clear, location: 0.35),
+                    .init(color: .clear, location: 1.0)
                 ],
                 center: .center,
                 startAngle: .degrees(0),
@@ -108,144 +75,88 @@ struct ThreatScoreRing: View {
             )
             .mask(
                 Circle()
-                    .frame(width: 160, height: 160)
+                    .frame(width: 180, height: 180)
             )
             .rotationEffect(.degrees(radarRotation))
             
-            // Radar line
+            // Radar line (bright edge)
             Rectangle()
                 .fill(
                     LinearGradient(
-                        colors: [threatLevel.color, threatLevel.color.opacity(0)],
-                        startPoint: .center,
+                        colors: [radarColor, radarColor.opacity(0.8), radarColor.opacity(0)],
+                        startPoint: .bottom,
                         endPoint: .top
                     )
                 )
-                .frame(width: 2, height: 80)
-                .offset(y: -40)
+                .frame(width: 2, height: 90)
+                .offset(y: -45)
+                .shadow(color: radarColor, radius: 4)
                 .rotationEffect(.degrees(radarRotation))
         }
     }
     
-    // MARK: - Main Progress Ring
-    private var mainProgressRing: some View {
+    // MARK: - Outer Ring
+    private var outerRing: some View {
         ZStack {
-            // Background ring
+            // Main outer ring
             Circle()
-                .stroke(Theme.backgroundTertiary.opacity(0.5), lineWidth: 10)
-                .frame(width: 150, height: 150)
+                .stroke(radarColor.opacity(0.8), lineWidth: 2)
+                .frame(width: 190, height: 190)
             
-            // Progress arc
+            // Glow behind the ring
             Circle()
-                .trim(from: 0, to: CGFloat(animatedScore) / 100)
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            threatLevel.color.opacity(0.3),
-                            threatLevel.color,
-                            threatLevel.color
-                        ],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                )
-                .frame(width: 150, height: 150)
-                .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 1), value: animatedScore)
-            
-            // Glow effect on progress
-            Circle()
-                .trim(from: 0, to: CGFloat(animatedScore) / 100)
-                .stroke(threatLevel.color, lineWidth: 10)
-                .frame(width: 150, height: 150)
-                .blur(radius: 12)
+                .stroke(radarGlow, lineWidth: 4)
+                .frame(width: 190, height: 190)
+                .blur(radius: 8)
                 .opacity(glowOpacity)
-                .rotationEffect(.degrees(-90))
-            
-            // End cap glow dot
-            if animatedScore > 0 {
-                Circle()
-                    .fill(threatLevel.color)
-                    .frame(width: 14, height: 14)
-                    .shadow(color: threatLevel.color, radius: 10)
-                    .offset(y: -75)
-                    .rotationEffect(.degrees(-90 + (Double(animatedScore) / 100 * 360)))
-            }
         }
     }
     
-    // MARK: - Inner Tech Ring
-    private var innerTechRing: some View {
+    // MARK: - Central Orb
+    private var centralOrb: some View {
         ZStack {
-            // Segmented inner ring
-            ForEach(0..<24, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(index < Int(Double(animatedScore) / 100 * 24) ? threatLevel.color : Theme.backgroundTertiary.opacity(0.3))
-                    .frame(width: 2, height: 8)
-                    .offset(y: -60)
-                    .rotationEffect(.degrees(Double(index) * 15 + innerRotation))
-            }
-            
-            // Rotating accent marks
-            ForEach(0..<4, id: \.self) { index in
-                Rectangle()
-                    .fill(threatLevel.color.opacity(0.6))
-                    .frame(width: 1, height: 12)
-                    .offset(y: -52)
-                    .rotationEffect(.degrees(Double(index) * 90 - innerRotation * 2))
-            }
-        }
-    }
-    
-    // MARK: - Floating Particles
-    private var floatingParticles: some View {
-        ZStack {
-            ForEach(0..<8, id: \.self) { index in
-                Circle()
-                    .fill(threatLevel.color.opacity(0.6))
-                    .frame(width: CGFloat.random(in: 2...4), height: CGFloat.random(in: 2...4))
-                    .offset(
-                        x: cos(CGFloat(index) * .pi / 4 + particleOffset) * 90,
-                        y: sin(CGFloat(index) * .pi / 4 + particleOffset) * 90
-                    )
-                    .blur(radius: 1)
-            }
-        }
-    }
-    
-    // MARK: - Central Core
-    private var centralCore: some View {
-        ZStack {
-            // Inner glow circle
+            // Glowing orb background
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [threatLevel.color.opacity(0.15), .clear],
+                        colors: [
+                            Color(red: 0.8, green: 0.4, blue: 1.0),
+                            Color(red: 0.5, green: 0.2, blue: 0.9),
+                            Color(red: 0.3, green: 0.1, blue: 0.6).opacity(0.5),
+                            .clear
+                        ],
                         center: .center,
                         startRadius: 0,
                         endRadius: 50
                     )
                 )
-                .frame(width: 100, height: 100)
+                .frame(width: 90, height: 90)
                 .scaleEffect(pulseScale)
             
-            // Core content
-            VStack(spacing: 2) {
+            // Inner bright core
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            .white.opacity(0.9),
+                            Color(red: 0.7, green: 0.5, blue: 1.0),
+                            Color(red: 0.5, green: 0.2, blue: 0.9)
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 25
+                    )
+                )
+                .frame(width: 50, height: 50)
+                .shadow(color: radarColor, radius: 15)
+            
+            // Score and status overlay
+            VStack(spacing: 0) {
                 Text("\(animatedScore)")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .foregroundColor(threatLevel.color)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
                     .contentTransition(.numericText())
-                    .shadow(color: threatLevel.color.opacity(0.5), radius: 10)
-                
-                Text(threatLevel.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.textSecondary)
-                    .kerning(2)
-                
-                Image(systemName: threatLevel.icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(threatLevel.color)
-                    .padding(.top, 4)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
             }
         }
     }
@@ -257,59 +168,20 @@ struct ThreatScoreRing: View {
             animatedScore = score
         }
         
-        // Outer ring rotation
-        withAnimation(.linear(duration: 30).repeatForever(autoreverses: false)) {
-            rotation = 360
-        }
-        
-        // Inner ring rotation
-        withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
-            innerRotation = 360
-        }
-        
-        // Radar sweep
-        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+        // Radar sweep - smooth continuous rotation
+        withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
             radarRotation = 360
         }
         
-        // Pulse effect
+        // Pulse effect on orb
         withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.1
+            pulseScale = 1.15
         }
         
         // Glow pulsing
         withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            glowOpacity = 0.6
+            glowOpacity = 0.7
         }
-        
-        // Particle movement
-        withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-            particleOffset = .pi * 2
-        }
-    }
-}
-
-// MARK: - Hexagon Shape
-struct HexagonShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        
-        for i in 0..<6 {
-            let angle = CGFloat(i) * .pi / 3 - .pi / 2
-            let point = CGPoint(
-                x: center.x + radius * cos(angle),
-                y: center.y + radius * sin(angle)
-            )
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        path.closeSubpath()
-        return path
     }
 }
 
