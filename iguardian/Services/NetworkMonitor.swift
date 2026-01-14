@@ -229,11 +229,13 @@ class NetworkMonitor: ObservableObject {
         lastTraffic = currentTraffic
         lastUpdateTime = now
         
-        // Record to persistent storage
+        // Record to persistent storage with WiFi/Cellular breakdown
         Task { @MainActor in
             TrafficLogManager.shared.recordTraffic(
-                systemUpload: currentTraffic.totalUpload,
-                systemDownload: currentTraffic.totalDownload
+                wifiUpload: currentTraffic.wifiUpload,
+                wifiDownload: currentTraffic.wifiDownload,
+                cellularUpload: currentTraffic.cellularUpload,
+                cellularDownload: currentTraffic.cellularDownload
             )
         }
     }

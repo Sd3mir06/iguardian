@@ -2,7 +2,7 @@
 //  TrafficSummaryView.swift
 //  iguardian
 //
-//  Displays persistent traffic statistics (today, week, month, all-time)
+//  Displays persistent traffic statistics with WiFi vs Cellular breakdown
 //
 
 import SwiftUI
@@ -17,14 +17,50 @@ struct TrafficSummaryView: View {
                 // Header Card
                 headerCard
                 
-                // Summary Cards
-                todayCard
-                weekCard
-                monthCard
-                allTimeCard
+                // Today Card with breakdown
+                TrafficPeriodCard(
+                    title: "Today",
+                    icon: "calendar",
+                    iconColor: .blue,
+                    wifiUploadMB: trafficManager.todayWifiUploadMB,
+                    wifiDownloadMB: trafficManager.todayWifiDownloadMB,
+                    cellularUploadMB: trafficManager.todayCellularUploadMB,
+                    cellularDownloadMB: trafficManager.todayCellularDownloadMB
+                )
                 
-                // Daily Breakdown Chart (placeholder for future)
-                dailyBreakdownCard
+                // This Week
+                TrafficPeriodCard(
+                    title: "This Week",
+                    icon: "calendar.badge.clock",
+                    iconColor: .green,
+                    wifiUploadMB: Double(trafficManager.weekWifiUploadBytes) / (1024 * 1024),
+                    wifiDownloadMB: Double(trafficManager.weekWifiDownloadBytes) / (1024 * 1024),
+                    cellularUploadMB: Double(trafficManager.weekCellularUploadBytes) / (1024 * 1024),
+                    cellularDownloadMB: Double(trafficManager.weekCellularDownloadBytes) / (1024 * 1024)
+                )
+                
+                // This Month
+                TrafficPeriodCard(
+                    title: "This Month",
+                    icon: "calendar.circle",
+                    iconColor: .orange,
+                    wifiUploadMB: Double(trafficManager.monthWifiUploadBytes) / (1024 * 1024),
+                    wifiDownloadMB: Double(trafficManager.monthWifiDownloadBytes) / (1024 * 1024),
+                    cellularUploadMB: Double(trafficManager.monthCellularUploadBytes) / (1024 * 1024),
+                    cellularDownloadMB: Double(trafficManager.monthCellularDownloadBytes) / (1024 * 1024)
+                )
+                
+                // All Time
+                TrafficPeriodCard(
+                    title: "All Time",
+                    icon: "infinity",
+                    iconColor: Theme.accentPrimary,
+                    wifiUploadMB: Double(trafficManager.allTimeWifiUploadBytes) / (1024 * 1024),
+                    wifiDownloadMB: Double(trafficManager.allTimeWifiDownloadBytes) / (1024 * 1024),
+                    cellularUploadMB: Double(trafficManager.allTimeCellularUploadBytes) / (1024 * 1024),
+                    cellularDownloadMB: Double(trafficManager.allTimeCellularDownloadBytes) / (1024 * 1024),
+                    isHighlighted: true
+                )
                 
                 // Reset Button
                 resetButton
@@ -60,93 +96,28 @@ struct TrafficSummaryView: View {
             Text("Tracking since \(formattedStartDate)")
                 .font(Theme.caption)
                 .foregroundColor(Theme.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
-                .fill(Theme.backgroundSecondary)
-        )
-    }
-    
-    // MARK: - Today Card
-    private var todayCard: some View {
-        TrafficStatCard(
-            title: "Today",
-            icon: "calendar",
-            iconColor: .blue,
-            uploadMB: trafficManager.todayUploadMB,
-            downloadMB: trafficManager.todayDownloadMB
-        )
-    }
-    
-    // MARK: - Week Card
-    private var weekCard: some View {
-        TrafficStatCard(
-            title: "This Week",
-            icon: "calendar.badge.clock",
-            iconColor: .green,
-            uploadMB: trafficManager.weekUploadMB,
-            downloadMB: trafficManager.weekDownloadMB
-        )
-    }
-    
-    // MARK: - Month Card
-    private var monthCard: some View {
-        TrafficStatCard(
-            title: "This Month",
-            icon: "calendar.circle",
-            iconColor: .orange,
-            uploadMB: trafficManager.monthUploadMB,
-            downloadMB: trafficManager.monthDownloadMB
-        )
-    }
-    
-    // MARK: - All Time Card
-    private var allTimeCard: some View {
-        TrafficStatCard(
-            title: "All Time",
-            icon: "infinity",
-            iconColor: Theme.accentPrimary,
-            uploadMB: trafficManager.allTimeUploadMB,
-            downloadMB: trafficManager.allTimeDownloadMB,
-            isHighlighted: true
-        )
-    }
-    
-    // MARK: - Daily Breakdown
-    private var dailyBreakdownCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "chart.bar.xaxis")
-                    .foregroundColor(Theme.accentSecondary)
-                Text("LAST 7 DAYS")
-                    .font(Theme.micro)
-                    .foregroundColor(Theme.textTertiary)
-                    .kerning(1.2)
-                Spacer()
-            }
             
-            let dailyData = trafficManager.getDailyBreakdown(days: 7)
-            
-            if dailyData.isEmpty {
-                Text("No data yet. Keep the app running to collect traffic statistics.")
-                    .font(Theme.caption)
-                    .foregroundColor(Theme.textTertiary)
-                    .padding(.vertical, 20)
-                    .frame(maxWidth: .infinity)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(dailyData, id: \.date) { day in
-                        DailyBreakdownRow(
-                            date: day.date,
-                            uploadMB: Double(day.upload) / (1024 * 1024),
-                            downloadMB: Double(day.download) / (1024 * 1024)
-                        )
-                    }
+            // WiFi vs Cellular summary
+            HStack(spacing: 24) {
+                HStack(spacing: 6) {
+                    Image(systemName: "wifi")
+                        .foregroundColor(.blue)
+                    Text(formatSize(trafficManager.allTimeWifiTotalMB))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                }
+                
+                HStack(spacing: 6) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .foregroundColor(.orange)
+                    Text(formatSize(trafficManager.allTimeCellularTotalMB))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
                 }
             }
+            .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity)
         .padding()
         .background(
             RoundedRectangle(cornerRadius: Theme.cornerRadiusMedium)
@@ -180,61 +151,136 @@ struct TrafficSummaryView: View {
         formatter.dateStyle = .medium
         return formatter.string(from: trafficManager.trackingStartDate)
     }
+    
+    private func formatSize(_ mb: Double) -> String {
+        if mb < 1 { return String(format: "%.0f KB", mb * 1024) }
+        else if mb < 1024 { return String(format: "%.1f MB", mb) }
+        else { return String(format: "%.2f GB", mb / 1024) }
+    }
 }
 
-// MARK: - Traffic Stat Card
-struct TrafficStatCard: View {
+// MARK: - Traffic Period Card with WiFi/Cellular breakdown
+struct TrafficPeriodCard: View {
     let title: String
     let icon: String
     let iconColor: Color
-    let uploadMB: Double
-    let downloadMB: Double
+    let wifiUploadMB: Double
+    let wifiDownloadMB: Double
+    let cellularUploadMB: Double
+    let cellularDownloadMB: Double
     var isHighlighted: Bool = false
     
+    private var totalMB: Double {
+        wifiUploadMB + wifiDownloadMB + cellularUploadMB + cellularDownloadMB
+    }
+    
+    private var wifiTotalMB: Double { wifiUploadMB + wifiDownloadMB }
+    private var cellularTotalMB: Double { cellularUploadMB + cellularDownloadMB }
+    
     var body: some View {
-        HStack(spacing: 16) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 50, height: 50)
-                
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(iconColor)
-            }
-            
-            // Title and Total
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(Theme.body)
-                    .foregroundColor(Theme.textPrimary)
-                
-                Text("Total: \(formatSize(uploadMB + downloadMB))")
-                    .font(Theme.caption)
-                    .foregroundColor(Theme.textTertiary)
-            }
-            
-            Spacer()
-            
-            // Upload/Download
-            VStack(alignment: .trailing, spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.cyan)
-                    Text(formatSize(uploadMB))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundColor(iconColor)
                 }
                 
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                    Text(formatSize(downloadMB))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(Theme.body)
+                        .foregroundColor(Theme.textPrimary)
+                    
+                    Text("Total: \(formatSize(totalMB))")
+                        .font(Theme.caption)
+                        .foregroundColor(Theme.textTertiary)
+                }
+                
+                Spacer()
+            }
+            
+            // WiFi Row
+            HStack {
+                Image(systemName: "wifi")
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
+                    .frame(width: 20)
+                
+                Text("WiFi")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .frame(width: 55, alignment: .leading)
+                
+                Spacer()
+                
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10))
+                            .foregroundColor(.cyan)
+                        Text(formatSize(wifiUploadMB))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text(formatSize(wifiDownloadMB))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                    
+                    Text(formatSize(wifiTotalMB))
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                        .frame(width: 55, alignment: .trailing)
+                }
+            }
+            
+            // Cellular Row
+            HStack {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                    .frame(width: 20)
+                
+                Text("Cellular")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textSecondary)
+                    .frame(width: 55, alignment: .leading)
+                
+                Spacer()
+                
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10))
+                            .foregroundColor(.cyan)
+                        Text(formatSize(cellularUploadMB))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text(formatSize(cellularDownloadMB))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                    
+                    Text(formatSize(cellularTotalMB))
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                        .frame(width: 55, alignment: .trailing)
                 }
             }
         }
@@ -250,71 +296,9 @@ struct TrafficStatCard: View {
     }
     
     private func formatSize(_ mb: Double) -> String {
-        if mb < 1 {
-            return String(format: "%.0f KB", mb * 1024)
-        } else if mb < 1024 {
-            return String(format: "%.1f MB", mb)
-        } else {
-            return String(format: "%.2f GB", mb / 1024)
-        }
-    }
-}
-
-// MARK: - Daily Breakdown Row
-struct DailyBreakdownRow: View {
-    let date: Date
-    let uploadMB: Double
-    let downloadMB: Double
-    
-    var body: some View {
-        HStack {
-            Text(dayString)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Theme.textSecondary)
-                .frame(width: 60, alignment: .leading)
-            
-            // Mini bar
-            GeometryReader { geo in
-                let maxMB = max(uploadMB + downloadMB, 1)
-                let totalWidth = geo.size.width
-                
-                HStack(spacing: 2) {
-                    // Upload portion
-                    Rectangle()
-                        .fill(Color.cyan)
-                        .frame(width: max(2, totalWidth * CGFloat(uploadMB / maxMB) * 0.5))
-                    
-                    // Download portion
-                    Rectangle()
-                        .fill(Color.green)
-                        .frame(width: max(2, totalWidth * CGFloat(downloadMB / maxMB) * 0.5))
-                }
-                .frame(height: 8)
-                .clipShape(Capsule())
-            }
-            .frame(height: 8)
-            
-            Text(formatSize(uploadMB + downloadMB))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(Theme.textTertiary)
-                .frame(width: 60, alignment: .trailing)
-        }
-    }
-    
-    private var dayString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date)
-    }
-    
-    private func formatSize(_ mb: Double) -> String {
-        if mb < 1 {
-            return String(format: "%.0f KB", mb * 1024)
-        } else if mb < 1024 {
-            return String(format: "%.0f MB", mb)
-        } else {
-            return String(format: "%.1f GB", mb / 1024)
-        }
+        if mb < 1 { return String(format: "%.0f KB", mb * 1024) }
+        else if mb < 1024 { return String(format: "%.1f MB", mb) }
+        else { return String(format: "%.2f GB", mb / 1024) }
     }
 }
 
