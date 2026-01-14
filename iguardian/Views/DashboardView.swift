@@ -88,9 +88,9 @@ struct DashboardView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         showDebug = true
-                        LogManager.shared.log("Opening Debug Console", level: .debug, category: "UI")
+                        LogManager.shared.log("Opening Guardian X-Ray", level: .debug, category: "UI")
                     } label: {
-                        Image(systemName: "shield.checkered")
+                        Image(systemName: "eye.trianglebadge.exclamationmark")
                             .font(.title2)
                             .foregroundColor(Theme.accentPrimary)
                     }
@@ -117,7 +117,7 @@ struct DashboardView: View {
                 SettingsView()
             }
             .sheet(isPresented: $showDebug) {
-                DebugConsoleView()
+                XRayView(monitoringManager: monitoringManager)
             }
         }
         .onAppear {
