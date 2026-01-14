@@ -157,16 +157,12 @@ struct SplashView: View {
                         .fill(Theme.accentPrimary.opacity(0.1))
                         .frame(width: 120, height: 120)
                     
-                    // Shield icon
-                    Image(systemName: "shield.checkered")
-                        .font(.system(size: 60))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Theme.accentPrimary, Color.cyan.opacity(0.7)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                    // App logo image
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 22))
                         .shadow(color: Theme.accentPrimary.opacity(0.5), radius: 20)
                 }
                 

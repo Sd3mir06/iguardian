@@ -75,9 +75,11 @@ struct PaywallView: View {
                     )
                     .frame(width: 100, height: 100)
                 
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.white)
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
             }
             
             Text("iGuardian Premium")

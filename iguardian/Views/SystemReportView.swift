@@ -173,9 +173,11 @@ struct SystemReportView: View {
     private func reportHeader(_ report: SystemReport) -> some View {
         VStack(spacing: 8) {
             HStack {
-                Image(systemName: "shield.checkered")
-                    .font(.title)
-                    .foregroundColor(Theme.accentPrimary)
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 Text("GUARDIAN SYSTEM REPORT")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))

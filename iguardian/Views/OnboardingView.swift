@@ -20,7 +20,8 @@ struct OnboardingView: View {
             title: "Welcome to iGuardian",
             subtitle: "Your Silent Security Partner",
             description: "iGuardian monitors your device for suspicious background activity that could indicate surveillance or data theft.",
-            features: []
+            features: [],
+            useAppLogo: true
         ),
         OnboardingPage(
             icon: "eye.slash.fill",
@@ -187,6 +188,7 @@ struct OnboardingPage: Identifiable {
     let subtitle: String
     let description: String
     let features: [OnboardingFeature]
+    var useAppLogo: Bool = false
 }
 
 struct OnboardingFeature: Identifiable {
@@ -218,17 +220,26 @@ struct OnboardingPageView: View {
                     .fill(page.iconColor.opacity(0.15))
                     .frame(width: 140, height: 140)
                 
-                // Icon
-                Image(systemName: page.icon)
-                    .font(.system(size: 60))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [page.iconColor, page.iconColor.opacity(0.7)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                // Icon or App Logo
+                if page.useAppLogo {
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 22))
+                        .shadow(color: page.iconColor.opacity(0.5), radius: 20)
+                } else {
+                    Image(systemName: page.icon)
+                        .font(.system(size: 60))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [page.iconColor, page.iconColor.opacity(0.7)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .shadow(color: page.iconColor.opacity(0.5), radius: 20)
+                        .shadow(color: page.iconColor.opacity(0.5), radius: 20)
+                }
             }
             .onAppear {
                 isAnimated = true

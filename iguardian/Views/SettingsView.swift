@@ -302,9 +302,11 @@ struct SettingsView: View {
                 // App Info
                 Section {
                     VStack(spacing: 8) {
-                        Image(systemName: "shield.checkered")
-                            .font(.system(size: 40))
-                            .foregroundColor(Theme.accentPrimary)
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
                         
                         Text("iGuardian")
                             .font(Theme.headline)
