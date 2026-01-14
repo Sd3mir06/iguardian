@@ -71,7 +71,7 @@ struct XRayView: View {
             .navigationTitle("GUARDIAN X-RAY")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showSystemReport) {
-                SystemReportView()
+                SystemReportView(monitoringManager: monitoringManager)
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
